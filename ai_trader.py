@@ -1,61 +1,73 @@
+'''
+From Docs - https://platform.openai.com/docs/assistants/overview
+
+Assistants - These are the AI 
+Threads - these are where convos happen 
+Messages - these are the messages in the threads
+'''
+
 import dontshareconfig as d  # open ai key is in here like this key = 'jkklj;j'
 from openai import OpenAI
+import time 
 
 client = OpenAI(api_key=d.key)
+
+
+def save_assistant_id(assistant_id, filename="assistant_id.txt"):
+    '''
+    Saves the assistant ID to a specified file.
+    Parameters:
+        assistant_id: The unique ID of the assistant.
+        filename: The name of the file where the assistant ID will be saved.
+    '''
+    with open(filename, 'w') as file:
+        file.write(assistant_id)
 
 # Create the assistant
 assistant = client.beta.assistants.create(
     name='AI Trader',
-    instructions='you are a quant researcher...',
-    tools=[{'type': 'code_interpreter'}],
+    instructions='you are a quant researcher, find trading strategies for bitcoin',
     model='gpt-4-1106-preview'
 )
+
 print('Assistant created....')
+# save the assistant id
+save_assistant_id(assistant.id, filename="researcher_assistant_id.txt")
 
 # Create a thread
 thread = client.beta.threads.create()
-print('Thread created...')
+print(f'Thread created...{thread.id}')
 
-# Create a message in the thread
-message_response = client.beta.threads.messages.create(
+# save the thread id
+save_assistant_id(thread.id, filename="thread_id.txt")
+
+# add message to thread
+message = client.beta.threads.messages.create(
     thread_id=thread.id,
     role='user',
-    content='find me a trading strategy...'
-)
-print('Message created...')
+    content='find me a bitcoin trading strategy on the 15 minute that outperforms buy and hold. use the Vwap and keltner channels in the strategy. only output the strategy in a format that a 2nd ai agent can read and then code a backtest')
 
-# Access the content of the message
-message_content = message_response.content[0].text.value
-print("AI's response to message:", message_content)
-
-# Create a run
+# run the assistant 
 run = client.beta.threads.runs.create(
     thread_id=thread.id,
     assistant_id=assistant.id,
-    instructions='please address the user as king moon dev...'
 )
-print('Run created...')
 
-# Retrieve the run
-retrieved_run = client.beta.threads.runs.retrieve(
-    thread_id=thread.id,
-    run_id=run.id
-)
-print('Run retrieved...')
+while True:
+    run_status = client.beta.threads.runs.retrieve(
+        thread_id=thread.id,
+        run_id=run.id
+    )
+    if run_status.status in ['completed', 'failed', 'cancelled']:
+        print(f'Run completed with status: {run_status.status}')
+        break
+    else:
+        print('Run still in progress, waiting 5 seconds...')
+        time.sleep(5)
 
-# Assuming that 'retrieved_run' has a similar structure as 'message_response'
-# Access the content of the run
-# run_content = retrieved_run.some_attribute_here  # Update this line based on actual structure
-# print("AI's response to run:", run_content)
-
-# List messages in the thread
+# Fetch and print the messages after the run is completed
+print('Run finished, fetching messages...')
 messages = client.beta.threads.messages.list(thread_id=thread.id)
-print('Messages listed...')
-
-# Iterate through the messages using the appropriate method
-# Assuming 'messages' has an 'items' method to get the list of messages
-for message in messages.items():
-    # Access and print the content of each message
-    # Update this line based on the actual structure of the message object
-    message_content = message.content[0].text.value
-    print("Message Content:", message_content)
+print('Messages from the thread:')
+for message in messages.data:
+    print(f'{message.role.title()}: {message.content[0].text.value}')
